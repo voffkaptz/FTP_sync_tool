@@ -15,6 +15,7 @@ BG = '#f3f5f9'
 INK = '#182235'
 MUTED = '#64748b'
 BLUE = '#0078d4'
+APP_VERSION = '1.1.1'
 
 
 def asset(name):
@@ -61,7 +62,7 @@ class FluentApp:
             except (AttributeError, OSError):
                 pass
         self.root = tk.Tk()
-        self.root.title('FTP Sync Tool')
+        self.root.title(f'FTP Sync Tool {APP_VERSION}')
         self.root.geometry('1080x850')
         self.root.minsize(900, 700)
         self.root.configure(bg=BG)
@@ -413,7 +414,7 @@ class FluentApp:
             self.logs_window.lift()
             return
         win = self.logs_window = tk.Toplevel(self.root)
-        win.title('FTP Sync Tool — Журнал событий')
+        win.title(f'FTP Sync Tool {APP_VERSION} — Журнал событий')
         win.geometry('960x600')
         win.minsize(680, 400)
         win.configure(bg=BG)
@@ -440,10 +441,24 @@ class FluentApp:
         text.configure(yscrollcommand=ys.set, xscrollcommand=xs.set)
         text.tag_configure('error', foreground='#c42b1c')
         text.tag_configure('warning', foreground='#996300')
+        # Reserve the footer BEFORE the expanding text area. Otherwise pack
+        # can shrink the buttons below their text height at 600px or high DPI.
+        bottom = tk.Frame(win, bg=BG, padx=18, pady=14)
+        bottom.pack(side='bottom', fill='x', before=area)
         path_var = tk.StringVar()
-        ttk.Label(win, textvariable=path_var, style='Muted.TLabel', wraplength=880).pack(anchor='w', padx=18, pady=8)
-        bottom = ttk.Frame(win, padding=(18, 0, 18, 18))
-        bottom.pack(fill='x')
+        path_label = ttk.Label(win, textvariable=path_var, style='Muted.TLabel', wraplength=880)
+        path_label.pack(side='bottom', fill='x', padx=18, pady=(8, 0), before=area)
+        win.bind('<Configure>', lambda e: path_label.configure(wraplength=max(200, e.width - 36))
+                 if e.widget == win else None)
+
+        def log_button(caption, command):
+            # Explicit native text buttons are independent of ttk image layouts.
+            return tk.Button(bottom, text=caption, command=command,
+                             font=('Segoe UI', 10), foreground=INK, background='white',
+                             activeforeground=INK, activebackground='#edf5ff',
+                             disabledforeground=MUTED, relief='solid', borderwidth=1,
+                             padx=14, pady=8, takefocus=True, cursor='hand2',
+                             highlightcolor=BLUE, highlightbackground=BG, highlightthickness=1)
         cache = [None]
         def refresh(force=False):
             path = self.active_log_path or self.log_path()
@@ -483,8 +498,8 @@ class FluentApp:
         def copy_logs():
             win.clipboard_clear()
             win.clipboard_append(text.get('1.0', 'end-1c'))
-        self.button(bottom, 'Обновить', lambda: refresh(True)).pack(side='left')
-        self.button(bottom, 'Копировать', copy_logs).pack(side='left', padx=8)
+        log_button('Обновить', lambda: refresh(True)).pack(side='left')
+        log_button('Копировать', copy_logs).pack(side='left', padx=8)
         def open_folder():
             path = os.path.dirname(self.active_log_path or self.log_path())
             if hasattr(os, 'startfile'):
@@ -494,8 +509,8 @@ class FluentApp:
                     messagebox.showerror('Журнал', str(e), parent=win)
             else:
                 messagebox.showinfo('Папка журнала', path, parent=win)
-        self.button(bottom, 'Открыть папку', open_folder).pack(side='left')
-        self.button(bottom, 'Закрыть', win.destroy).pack(side='right')
+        log_button('Открыть папку', open_folder).pack(side='left')
+        log_button('Закрыть', win.destroy).pack(side='right')
         refresh(True)
         tick()
 

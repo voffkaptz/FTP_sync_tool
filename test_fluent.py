@@ -83,10 +83,9 @@ class Checks(unittest.TestCase):
 
 
 class LogWindowChecks(unittest.TestCase):
-    def test_log_action_labels_have_visible_text_width(self):
+    def test_log_actions_stay_visible_and_copy_at_small_window_sizes(self):
         import tkinter as tk
         import tkinter.font as tkfont
-        from tkinter import ttk
         from fluent_ui import FluentApp
         with tempfile.TemporaryDirectory() as folder:
             try:
@@ -97,20 +96,35 @@ class LogWindowChecks(unittest.TestCase):
                 raise
             try:
                 app.root.withdraw()
+                log_path = os.path.join(folder, 'test.log')
+                log_content = '[INFO] sample log line\n[ERROR] sample error\n'
+                with open(log_path, 'w', encoding='utf-8') as stream:
+                    stream.write(log_content)
+                app.active_log_path = log_path
                 app.open_logs()
-                app.root.update_idletasks()
+                win = app.logs_window
+                win.deiconify()
                 def descendants(widget):
                     for child in widget.winfo_children():
                         yield child
                         yield from descendants(child)
-                buttons = [w for w in descendants(app.logs_window) if isinstance(w, ttk.Button)]
+                buttons = [w for w in descendants(win) if isinstance(w, tk.Button)]
                 expected = {'Обновить', 'Копировать', 'Открыть папку', 'Закрыть'}
                 self.assertEqual({str(w['text']) for w in buttons}, expected)
-                style = ttk.Style(app.root)
-                for button in buttons:
-                    font = tkfont.Font(root=app.root, font=style.lookup(button['style'], 'font'))
-                    self.assertGreaterEqual(button.winfo_reqwidth(), font.measure(button['text']))
-                    self.assertEqual(str(button['compound']), 'text')
+                for geometry in ('960x600', '680x400'):
+                    win.geometry(geometry)
+                    win.update()
+                    for button in buttons:
+                        font = tkfont.Font(root=app.root, font=button['font'])
+                        self.assertGreaterEqual(button.winfo_width(), font.measure(button['text']))
+                        self.assertGreaterEqual(button.winfo_height(), button.winfo_reqheight())
+                        self.assertGreaterEqual(button.winfo_y(), 0)
+                        self.assertLessEqual(button.winfo_rooty() + button.winfo_height(),
+                                             win.winfo_rooty() + win.winfo_height())
+                        self.assertTrue(button.winfo_viewable())
+                next(w for w in buttons if w['text'] == 'Обновить').invoke()
+                next(w for w in buttons if w['text'] == 'Копировать').invoke()
+                self.assertEqual(win.clipboard_get(), log_content)
             finally:
                 app.root.destroy()
 
